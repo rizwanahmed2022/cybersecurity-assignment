@@ -1,7 +1,8 @@
 const net = require("net");
 
-const PORT = 65431;
-const HOST = "192.168.100.28";
+const PORT = 65432;
+///ip must match with your network 
+const HOST = "10.250.227.165";
 const message = "Rizwa Ahmed ka Message";
 const shift = 3;
 
@@ -26,6 +27,8 @@ function caesarCipher(message, shift) {
   return result;
 }
 
+
+
 // Encrypt the message
 const encryptedMessage = caesarCipher(message, shift);
 
@@ -48,3 +51,5 @@ client.connect(PORT, HOST, () => {
 
   client.destroy();
 });
+
+
