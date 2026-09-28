@@ -1,7 +1,8 @@
 const net = require("net");
 
-const PORT = 65431; 
-const HOST = "192.168.100.28";
+const PORT = 65432; 
+///ip must match with your network 
+const HOST = "10.250.227.165";
 const shift = 3;
 
 function decryptCaesar(message, shift) {
@@ -27,6 +28,8 @@ function decryptCaesar(message, shift) {
   return result;
 }
 
+
+
 const server = net.createServer((socket) => {
   console.log(`\n[+] Client connected from: ${socket.remoteAddress}`);
 
@@ -39,7 +42,6 @@ const server = net.createServer((socket) => {
     // 2. Decrypt and read the message
     const decryptedMessage = decryptCaesar(encryptedMessage, shift);
     
-
 
     console.log("----------------------------------------");
     console.log(`[Message Output]: ${decryptedMessage}`);
