@@ -3,7 +3,10 @@
 ## How to Run
 
 1. **Run Server:**
-   ```terminal
+   ```Terminal
    node server
+
+2. **Run Client:**
+   ```Terminal
    node client
 
