@@ -1,37 +1,52 @@
-# Firestore Security Specification (`SECURITY_SPEC.md`)
-
-## 1. Data Invariants (`UserDeviceLicense` at `/users/{userId}`)
-1. **Owner-Only Isolation (PII Guard):** Only the authenticated owner (`request.auth.uid == userId`) can `get`, `create`, or `update` `/users/{userId}`. Collection-wide `list` and `delete` operations are unconditionally denied.
-2. **Mandatory Pending Registration State:** Every newly created `/users/{userId}` document MUST initialize with `"isActivated": false` alongside a valid bound hardware `deviceId` (`8..128` chars matching `^[a-zA-Z0-9_\-]+$`) and ISO `registeredAt` timestamp. Clients can NEVER create a document with `isActivated: true`.
-3. **Administrator-Only Activation Gate:** Clients can NEVER transition `isActivated` from `false` to `true` (nor mutate `isActivated` at all). Only an administrator via Firebase Console or Admin SDK can set `isActivated: true` (or revoke it back to `false`).
-4. **Immutable Identity, Hardware ID & Timestamps:** `uid`, `email`, `deviceId`, `registeredAt`, and `createdAt` can never be mutated after creation, and `uid` / `email` must match `request.auth.uid` / `request.auth.token.email`.
-5. **Server Timestamp Enforcement:** `createdAt` (on create) and `updatedAt` (on create/update) must strictly equal `request.time`.
+# Project Roadmap & Task Tracking (`TASKS.md`)
+**Product:** ZetaERP — Import, Wholesale & Fleet Management System  
+**Current Project Status:** Production-Ready Local Desktop & Web ERP (`v1.0.0`, 100% JavaScript, 50/50 Automated Tests Passing, Windows `.exe` Ready)
 
 ---
 
-## 2. The "Dirty Dozen" Adversarial Payloads
+## 1. Completed Milestones (Verified in Codebase)
 
-| # | Attack Vector | Malicious Payload / Operation | Expected Result | Blocking Gate |
-| :- | :--- | :--- | :--- | :--- |
-| 1 | **Unauthenticated Read** | `get /users/user_1` with `auth = null` | `PERMISSION_DENIED` | `isSignedIn()` |
-| 2 | **Cross-Tenant PII Read** | `get /users/victim_uid` as `attacker_uid` | `PERMISSION_DENIED` | `isOwner(userId)` |
-| 3 | **Collection Scraping** | `list /users` as `attacker_uid` | `PERMISSION_DENIED` | `allow list: if false` |
-| 4 | **Identity Spoofing on Create** | `create /users/attacker_uid` with `{ "uid": "victim_uid", ... }` | `PERMISSION_DENIED` | `data.uid == request.auth.uid` |
-| 5 | **Email Mismatch Spoof** | `create /users/u1` with `{ "email": "ceo@corp.com" }` when token email differs | `PERMISSION_DENIED` | `data.email.lower() == request.auth.token.email.lower()` |
-| 6 | **Self-Activation on Create** | `create /users/u1` with `{ "isActivated": true, "deviceId": "hw-12345678" }` | `PERMISSION_DENIED` | `incoming().isActivated == false` |
-| 7 | **Self-Activation on Update** | `update /users/u1` flipping `isActivated: false -> true` | `PERMISSION_DENIED` | `existing().isActivated == true && incoming().isActivated == true` |
-| 8 | **Shadow Field Injection** | `create /users/u1` with extra `{ "isAdmin": true }` | `PERMISSION_DENIED` | `data.keys().hasOnly([...])` |
-| 9 | **Resource Poisoning (ID)** | `create /users/<200-char-junk>` | `PERMISSION_DENIED` | `isValidId(userId)` |
-| 10 | **Value Poisoning on Update** | `update /users/u1` setting `displayName: 12345` or 50KB string | `PERMISSION_DENIED` | `isValidUserDeviceLicense(incoming())` |
-| 11 | **Hardware Hijack / Rebind** | `update /users/u1` changing `deviceId` | `PERMISSION_DENIED` | `incoming().deviceId == existing().deviceId` |
-| 12 | **Unauthorized Record Wipe** | `delete /users/u1` as owner | `PERMISSION_DENIED` | `allow delete: if false` |
+### Core Infrastructure, Pure JavaScript & Database Hardening
+- [x] **TASK-001 (`P0`):** Implement local SQLite database engine using `sql.js` with crash-safe atomic disk writes (`import_business.sqlite.tmp` -> `import_business.sqlite`) and foreign key enforcement (`server/db.js`).
+- [x] **TASK-002 (`P0`):** Define and maintain all **24 relational SQLite tables** (`categories`, `products`, `warehouses`, `suppliers`, `customers`, `imports`, `import_items`, `sales`, `sale_items`, `inventory_transactions`, `vehicles`, `vehicle_trips`, `expense_categories`, `expenses`, `employees`, `attendance`, `salary_advances`, `salary_deductions`, `salary_payroll`, `salary_payments`, `daily_labour_payments`, `payments`, `audit_logs`, `settings`) with composite indexes (`server/db.js`).
+- [x] **TASK-003 (`P0`):** Implement non-destructive `ALTER TABLE` schema migrations, `ZETA_DATA_DIR` desktop user-data directory resolution, and both **Clean Slate** (`resetDatabaseToClean`) and **Demo Master Data** (`applyRequestedMasterDefaults`) reset workflows (`server/db.js`).
+- [x] **TASK-004 (`P0`):** Migrate entire frontend, backend, Electron shell, and build scripts to **100% pure JavaScript** (`.js`, `.jsx`, `.cjs`), removing all TypeScript files and unused legacy artifacts (`DashboardView`, `Header`, `ErpIllustrations`, unused dependencies).
+
+### Desktop UI Shell, Dual-Logo Branding & Executive Home Overview
+- [x] **TASK-005 (`P0`):** Build permanent left navigation sidebar (`src/components/ErpSidebar.jsx`) organizing all 14 ERP views into logical operational groups (`Overview`, `Procurement & Stock`, `Sales & Parties`, `Operations & HR`, `Finance & System`).
+- [x] **TASK-006 (`P0`):** Redesign `ErpTitleAndMenuBar.jsx` into a clean **two-layer logical desktop header**:
+  - **Layer 1 (Top Bar):** Active module title & subtitle + classic desktop menus (`File`, `Edit`, `View`, `Modules`, `Tools`, `Help`) + `Sync`, `Fullscreen`, Electron IPC window controls, and `User` profile menu.
+  - **Layer 2 (Secondary Bar):** Quick-action buttons (`+ Import`, `+ New Sale`, `+ Expense`) + `Calculator` + dynamic multi-tab workspace switcher.
+- [x] **TASK-007 (`P0`):** Redesign `HomeScreenView.jsx` as a professional **Executive Financial & Operational Overview** (KPI cards, Cash Flow & Profit Trend chart, Receivables vs. Payables summary, Low-Stock & Fleet Utilization panels, and Recent Transactions/Audit feed) with zero duplicate module launcher grids.
+- [x] **TASK-008 (`P0`):** Enforce strict **Dual-Logo Separation**:
+  - **Immutable App Logo (`src/components/ZetaBrandMark.jsx`):** Uses the official ZetaERP emblem (`/assets/aistudio/Gemini_Generated_Image_d80toed80toed80t_6a689eba.jpeg`) in the sidebar, About modal, browser favicon, and Windows `.exe` icon.
+  - **Configurable Business Logo (`settings.business_logo`):** Uploadable/changeable in `SettingsView.jsx` (`Settings -> Branding`) and printed exclusively on A4 Commercial Invoices, 80mm Thermal Receipts, Khata Statements, and PDF Reports (`src/utils/pdfGenerator.js`, `src/components/InvoiceModal.jsx`).
+
+### Operational & Financial Modules
+- [x] **TASK-009 (`P0`):** Import Management (`ImportsView.jsx`, `POST /api/imports`) with multi-item cargo calculation, company vs. third-party transport, inline clearing expenses, stock increment, and landed cost per KG calculation.
+- [x] **TASK-010 (`P0`):** Overseas Supplier Khata & Statement system (`SuppliersView.jsx`, `SupplierStatementModal.jsx`) with chronological running balance, payment recording (`PAID`/`RECEIVED`), voiding, audit trail, and PDF export.
+- [x] **TASK-011 (`P0`):** Local Customer Khata & Statement system (`CustomersView.jsx`, `CustomerStatementModal.jsx`) with chronological running balance, payment receipts (`RECEIVED`/`PAID`), voiding with invoice balance reversal, and PDF export.
+- [x] **TASK-012 (`P0`):** Sales & Commercial Invoicing (`SalesView.jsx`, `InvoicesView.jsx`, `InvoiceModal.jsx`) with cumulative multi-row SKU stock validation, A4 Commercial Invoice, and 80mm Thermal Receipt printing.
+- [x] **TASK-013 (`P1`):** Fleet Management & Third-Party Haulage Trips (`VehiclesView.jsx`, `/api/vehicle-trips`) tracking freight income, trip expenses, and net trip profit.
+- [x] **TASK-014 (`P1`):** HR, Daily Attendance batch entry, Salary Advances/Deductions, Monthly Payroll Sheet generation (with duplicate-month guard), and Daily Labour gang payments (`EmployeesView.jsx`, `PayrollView.jsx`).
+- [x] **TASK-015 (`P1`):** Hardened SQLite Backup, JSON Export & Restore engine (`BackupView.jsx`, `/api/backup/*`) with path-traversal protection, `SQLite format 3` header verification, and automatic `Safety_PreRestore` snapshots.
+
+### Bug Fixes, Automated Testing & Windows `.exe` Packaging
+- [x] **TASK-101 (`P1` - Resolved):** Aligned line-item field fallbacks (`weight ?? quantity`, `rate_per_kg ?? unit_price`, `amount ?? total_amount`) in `generateInvoicePdf` (`src/utils/pdfGenerator.js`).
+- [x] **TASK-102 (`P1` - Resolved):** Updated `GET /api/backup/export-json` (`server/api.js`) to export all **24 active SQLite tables** accurately.
+- [x] **TASK-103 (`P1` - Resolved):** Implemented `opening_balance` delta recalculation on `PUT /api/customers/:id` matching supplier ledger behavior, plus cumulative cart stock validation on `POST /api/sales` and balance reversal on `DELETE /api/imports/:id` and `DELETE /api/sales/:id` (`server/api.js`).
+- [x] **TASK-104 (`P2` - Resolved):** Aligned all report helper methods in `src/services/api.js` with `GET /api/reports` (`sales`, `imports`, `expenses`, `profit`, `payroll`).
+- [x] **TASK-105 (`P2` - Resolved):** Removed all native `window.alert` and `window.confirm` calls across the app in favor of toast banners and custom React confirmation dialogs.
+- [x] **TASK-201 (`P1` - Resolved):** Built a comprehensive **50-test Vitest unit & integration suite** across 7 test files (`src/test/*.test.js`, `src/test/*.test.jsx`) covering every React component, modal, utility, Express API endpoint, and SQLite transaction rollback/hardening path.
+- [x] **TASK-202 (`P0` - Resolved):** Configured one-command **Windows `.exe` packaging** (`electron-builder.json`, `electron/main.cjs`, `electron/preload.cjs`, `scripts/build.cjs`, `scripts/icon-data.cjs`) generating a 4-layer (`256x256`, `64x64`, `32x32`, `16x16`) `public/icon.ico` and building both `ZetaERP-Setup-1.0.0.exe` (NSIS installer) and `ZetaERP-Portable-1.0.0.exe` (standalone portable `.exe`) in `dist-electron/`.
+- [x] **TASK-203 (`P1` - Resolved):** Refined all 7 documentation files in `/docs/` (`PRD.md`, `ARCHITECTURE.md`, `DESIGN.md`, `RULES.md`, `TASKS.md`, `MEMORY.md`, `ERP_SPECIFICATION.md`) to match the verified codebase.
 
 ---
 
-## 3. Red Team Audit Report (`/users/{userId}`)
-- **Shadow Update Test:** PASS — Rejected by both `isValidUserDeviceLicense` (`keys().hasOnly(...)`) and action-level `affectedKeys().hasOnly(...)`.
-- **Self-Activation Bypass Test:** PASS — `allow create` enforces `incoming().isActivated == false` and `allow update` requires `existing().isActivated == true && incoming().isActivated == true`; no client operation can ever activate an account.
-- **Email Spoofing Test:** PASS — Document access is keyed strictly by `request.auth.uid == userId` (never by email lookup), and `data.email.lower() == request.auth.token.email.lower()` + `hasAuthenticatedEmail()` prevents arbitrary email injection.
-- **PII Blanket Test:** PASS — `allow get` requires `isOwner(userId)` and `allow list` is `false`.
-- **Query Trust Test:** PASS — Zero `allow list` rules exist.
-- **Identity Spoofing / State Shortcutting / Resource Poisoning / Value Poisoning:** PASS — Verified across all 8 Pillars.
+## 2. Optional Future Enhancements (Backlog)
+
+- [ ] **TASK-301 (`P3` - Proposed):** Per-Warehouse SKU Stock Breakdown (`warehouse_stock` join table) to track exact stock quantities per individual godown in addition to global `products.current_stock`.
+- [ ] **TASK-302 (`P3` - Proposed):** Optional Multi-User Local PIN / Role Lock Screen (`Admin` vs. `Billing Clerk` permissions) for shared warehouse terminals.
+- [ ] **TASK-303 (`P3` - Proposed):** Barcode / QR Label Printing (`jsPDF` label sheet generator) for fast SKU scanning at dispatch counters.
+
+
